@@ -24,47 +24,83 @@
  */
 
 class C; // Forward declaration
+class B;
+class A;
 
 class B {
 public:
-    explicit B(size_t i);
+    explicit B(size_t id_); // B must not know anything about other classes, but this id is included to demonstrate its work.
 
-    void Foo();
 
-    std::unique_ptr<C> observer;
-    size_t id;
+    void Foo(); // Example function that is needed to be run from A (for proxy & mediator).
+    size_t GetState(); // Example state is just a bool that shows that Foo was called at least once.
+    
+private:
+    bool was_called;
+    size_t id; 
 };
 
 class C {
 public:
-    explicit C(size_t b_number);
+    explicit C(size_t b_number); // Number of workers (objects of class B) is known before.
 
-    void BFoo();
+    void BFoo(); // Used as interface for calling A.Foo.
+    void AddListener(std::shared_ptr<A> ptr); // Adds new A that receives notifications.
+    void AskBState(size_t index); // Asks specific B about its state.
 
+private:
     std::vector<std::unique_ptr<B>> b_ptrs;
+    std::vector<std::shared_ptr<A>> listeners;
     size_t call_index;
 };
 
 class A {
 public:
-    A();
+    A(C* multitool_); // Uses C as proxy and / or mediator.
 
-    void CallFoo();
+    void CallFoo(); // Demonstrates calling B.Foo().
+    void GetNotification(bool x); // Receives information about states that it is subscribed to.
 
-    std::unique_ptr<C> multitool;
+private:
+    C* multitool;
 };
 
-
-B::B(size_t i) : id(i) {};
-
-void B::Foo() {
-    std::cout << "Yes ma'm, my number is " << id << std::endl;
+void A::GetNotification(bool x){
+    if(x){
+        std::cout << "Received state notification from B: it was already called" << std::endl;
+    }
+    else{
+        std::cout << "Received state notification from B: it has not been called yet" << std::endl;
+    }
 }
+
+A::A(C* multitool_) : multitool(multitool_) {}
+
+B::B(size_t id_) : id(id_), was_called(false) {}
 
 C::C(size_t b_number) : call_index(0) {
     b_ptrs.reserve(b_number);
     for (size_t i = 0; i < b_number; ++i)
         b_ptrs.emplace_back(new B(i));
+}
+
+void A::CallFoo() {
+    multitool->BFoo();
+}
+
+size_t B::GetState(){
+    return was_called;
+}
+
+void B::Foo() {
+    std::cout << "Yes ma'm, my number is " << id << std::endl;
+    was_called = true;
+}
+
+void C::AskBState(size_t index){
+    for(auto listener : listeners){
+        listener->GetNotification(b_ptrs[index]->GetState());
+    }
 }
 
 void C::BFoo() {
@@ -73,21 +109,35 @@ void C::BFoo() {
     call_index %= b_ptrs.size();
 }
 
-
-A::A() : multitool(new C(5)) {
-}
-
-void A::CallFoo() {
-    multitool->BFoo();
+void C::AddListener(std::shared_ptr<A> ptr){
+    listeners.push_back(ptr);
 }
 
 int main() {
-    A a;
-    a.CallFoo();
-    a.CallFoo();
-    a.CallFoo();
-    a.CallFoo();
-    a.CallFoo();
-    a.CallFoo();
+    C c(5);
+    A a1(&c);
+    A a2(&c);
+    A a3(&c);
+
+    c.AddListener(std::make_shared<A>(a1));
+    c.AddListener(std::make_shared<A>(a1));
+
+    for(size_t i = 0; i < 5; ++i)
+        c.AskBState(i);
+
+    a1.CallFoo();
+    
+    for(size_t i = 0; i < 5; ++i)
+        c.AskBState(i);
+
+    a2.CallFoo();
+    
+    for(size_t i = 0; i < 5; ++i)
+        c.AskBState(i);
+
+    a3.CallFoo();
+    for(size_t i = 0; i < 5; ++i)
+        c.AskBState(i);
+
     return 0;
 }
