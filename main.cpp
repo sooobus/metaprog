@@ -26,7 +26,7 @@
 //class C; // Forward declaration
 class B;
 
-template<size_t N>
+template<size_t N, bool NOTIFY>
 class A;
 
 class B {
@@ -43,7 +43,7 @@ private:
     size_t id;
 };
 
-template<size_t N>
+template<size_t N, bool NOTIFY>
 class C {
 public:
     explicit C() : call_index(0) { // Number of workers (objects of class B) is known before.
@@ -54,19 +54,19 @@ public:
 
     void BFoo(); // Used as interface for calling A.Foo.
 
-    void AddListener(std::shared_ptr<A<N>> ptr); // Adds new A that receives notifications.
+    void AddListener(std::shared_ptr<A<N, NOTIFY>> ptr); // Adds new A that receives notifications.
     void AskBState(size_t index); // Asks specific B about its state.
 
 private:
     std::vector<std::unique_ptr<B>> b_ptrs;
-    std::vector<std::shared_ptr<A<N>>> listeners;
+    std::vector<std::shared_ptr<A<N, NOTIFY>>> listeners;
     size_t call_index;
 };
 
-template<size_t N>
-class A {
+template<size_t N, bool NOTIFY>
+class A { // It can be not template if we move C pointer outside.
 public:
-    explicit A(C<N> *multitool_) : multitool(multitool_) {} // Uses C as proxy and / or mediator.
+    explicit A(C<N, NOTIFY> *multitool_) : multitool(multitool_) {} // Uses C as proxy and / or mediator.
 
     void CallFoo() { // Demonstrates calling B.Foo().
         multitool->BFoo();
@@ -75,11 +75,12 @@ public:
     void GetNotification(bool x); // Receives information about states that it is subscribed to.
 
 private:
-    C<N> *multitool;
+    C<N, NOTIFY> *multitool;
 };
 
-template<size_t N>
-void A<N>::GetNotification(bool x) {
+template<size_t N, bool NOTIFY>
+void A<N, NOTIFY>::GetNotification(bool x) {
+    if (!NOTIFY) return;
     if (x) {
         std::cout << "Received state notification from B: it was already called" << std::endl;
     } else {
@@ -98,33 +99,36 @@ void B::Foo() {
     was_called = true;
 }
 
-template<size_t N>
-void C<N>::AskBState(size_t index) {
-    for (const auto& listener : listeners) {
+template<size_t N, bool NOTIFY>
+void C<N, NOTIFY>::AskBState(size_t index) {
+    if (!NOTIFY) return;
+    for (const auto &listener : listeners) {
         listener->GetNotification(b_ptrs[index]->GetState());
     }
 }
 
-template<size_t N>
-void C<N>::BFoo() {
+template<size_t N, bool NOTIFY>
+void C<N, NOTIFY>::BFoo() {
     b_ptrs[call_index]->Foo();
     call_index++;
     call_index %= b_ptrs.size();
 }
 
-template<size_t N>
-void C<N>::AddListener(std::shared_ptr<A<N>> ptr) {
+template<size_t N, bool NOTIFY>
+void C<N, NOTIFY>::AddListener(std::shared_ptr<A<N, NOTIFY>> ptr) {
+    if (!NOTIFY) return;
     listeners.push_back(ptr);
 }
 
 int main() {
-    C<5> c;
-    A<5> a1(&c);
-    A<5> a2(&c);
-    A<5> a3(&c);
+    std::cout << "Example of observer / mediator hybrid" << std::endl;
+    C<5, true> c;
+    A<5, true> a1(&c);
+    A<5, true> a2(&c);
+    A<5, true> a3(&c);
 
-    c.AddListener(std::make_shared<A<5>>(a1));
-    c.AddListener(std::make_shared<A<5>>(a1));
+    c.AddListener(std::make_shared<A<5, true>>(a1));
+    c.AddListener(std::make_shared<A<5, true>>(a2));
 
     for (size_t i = 0; i < 5; ++i)
         c.AskBState(i);
@@ -143,5 +147,67 @@ int main() {
     for (size_t i = 0; i < 5; ++i)
         c.AskBState(i);
 
+    std::cout << "===========================\n Example of mediator " << std::endl;
+
+    C<5, false> c1;
+    A<5, false> a4(&c1);
+    A<5, false> a5(&c1);
+    A<5, false> a6(&c1);
+
+    c1.AddListener(std::make_shared<A<5, false>>(a4));
+    c1.AddListener(std::make_shared<A<5, false>>(a5));
+
+    for (size_t i = 0; i < 5; ++i)
+        c1.AskBState(i);
+
+    a4.CallFoo();
+
+    for (size_t i = 0; i < 5; ++i)
+        c1.AskBState(i);
+
+    a5.CallFoo();
+
+    for (size_t i = 0; i < 5; ++i)
+        c1.AskBState(i);
+
+    a6.CallFoo();
+    for (size_t i = 0; i < 5; ++i)
+        c1.AskBState(i);
+
+    std::cout << "===========================\n Example of notifier" << std::endl;
+
+    C<1, true> c3;
+    A<1, true> a7(&c3);
+    A<1, true> a8(&c3);
+    A<1, true> a9(&c3);
+
+    c3.AddListener(std::make_shared<A<1, true>>(a7));
+    c3.AddListener(std::make_shared<A<1, true>>(a8));
+
+    c3.AskBState(0);
+    a7.CallFoo();
+    c3.AskBState(0);
+    a8.CallFoo();
+    c3.AskBState(0);
+    a9.CallFoo();
+    c3.AskBState(0);
+
+    std::cout << "===========================\n Example of proxy" << std::endl;
+
+    C<1, false> c4;
+    A<1, false> a10(&c4);
+    A<1, false> a11(&c4);
+    A<1, false> a12(&c4);
+
+    c4.AddListener(std::make_shared<A<1, false>>(a10));
+    c4.AddListener(std::make_shared<A<1, false>>(a11));
+
+    c4.AskBState(0);
+    a10.CallFoo();
+    c4.AskBState(0);
+    a11.CallFoo();
+    c4.AskBState(0);
+    a12.CallFoo();
+    c4.AskBState(0);
     return 0;
 }
