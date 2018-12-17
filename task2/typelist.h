@@ -4,6 +4,7 @@
 // Remove type
 // Get N-th type
 // Get length
+// Get sizeof
 
 
 // Null type terminates list.
@@ -64,3 +65,36 @@ template <typename TL>
 struct get_nth<TL, 0>{ 
     using res = typename list_accessor<TL>::head;
 };
+
+// Length op.
+template <typename TL> struct length;
+
+template <>
+struct length<NullType>
+{
+    static const size_t res = 0;
+};
+
+template <typename T, typename L>
+struct length<my_typelist<T, L>>
+{
+    static const size_t res = 1 + length<L>::res;
+};
+
+// Sizeof op.
+template <typename TL> struct size;
+
+template <>
+struct size<NullType>
+{
+    static const size_t res = 0;
+};
+
+template <typename T, typename L>
+struct size<my_typelist<T, L>>
+{
+    static const size_t res = sizeof(T) + size<L>::res;
+};
+
+
+
