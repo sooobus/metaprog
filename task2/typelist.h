@@ -7,6 +7,7 @@
 // Get sizeof
 
 #include <cstddef>
+#include <fstream>
 
 // Null type terminates list.
 struct NullType{};
@@ -97,5 +98,13 @@ struct size<my_typelist<T, L>>
     static const size_t res = sizeof(T) + size<L>::res;
 };
 
+// Write op.
+template <typename TL>
+void print(std::ifstream &inp_stream, char* buf) {
+    typedef typename get_nth<TL, 0>::res type;
+    inp_stream >> *reinterpret_cast<type*>(buf);
+    print<remove_el<TL>>(inp_stream, buf + sizeof(type));
+}
 
-
+template <>
+void print<NullType>(std::ifstream &inp_stream, char* buf) {}

@@ -11,7 +11,6 @@ using my_l  = typename get_nth<my_pre_l,2 >::res;
 
 int main(){
 
-
 	const int l = size<my_pre_l>::res;
 	std::cout << sizeof(size_t) << " + " << sizeof(char) << " + " << sizeof(int) << " + " << l;
 
